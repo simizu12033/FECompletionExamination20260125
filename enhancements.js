@@ -33,16 +33,16 @@ window.FEStudy=(()=>{
  function mountLab(q){
   const c=CONFIG[q.n];if(!c)return null;
   const section=document.createElement('details');section.className='practice-lab';section.id=`lab-${q.n}`;
-  section.innerHTML=`<summary>条件を変えて確かめる：${esc(c.title)}</summary><p class="lab-note">まず結果を予想し、条件を変えて比較してください。</p><form class="lab-inputs">${c.fields.map(([key,label,value,min,max])=>`<label>${esc(label)}<input type="number" data-param="${key}" min="${min}" max="${max}" step="${['time','speed'].includes(key)?'0.1':'1'}" value="${esc(state.labs[q.n]?.[key]??value)}"></label>`).join('')}</form><p class="lab-result" aria-live="polite"></p>`;
+  section.innerHTML=`<summary>任意の参考演習：${esc(c.title)}</summary><p class="lab-note">まず結果を予想し、条件を変えて比較してください。</p><form class="lab-inputs">${c.fields.map(([key,label,value,min,max])=>`<label>${esc(label)}<input type="number" data-param="${key}" min="${min}" max="${max}" step="${['time','speed'].includes(key)?'0.1':'1'}" value="${esc(state.labs[q.n]?.[key]??value)}"></label>`).join('')}</form><p class="lab-result" aria-live="polite"></p>`;
   const show=()=>{const params={};let valid=true;section.querySelectorAll('[data-param]').forEach(input=>{params[input.dataset.param]=Number(input.value);if(input.value===''||!input.checkValidity())valid=false});section.querySelector('.lab-result').textContent=valid?c.calc(params):'各入力欄の範囲内で値を入力してください。';if(valid){state.labs[q.n]=params;save()}};
   section.querySelector('form').onsubmit=e=>e.preventDefault();section.oninput=show;show();return section;
  }
  function enhanceQuestion(node,q){
   const root=node.querySelector('.review-content');
-  const fast=document.createElement('section');fast.className='fast-route';fast.innerHTML=`<p class="study-step">1　試験での見分け方</p><h3>正答への最短ルート</h3><p>${esc(q.fastRoute)}</p>`;root.prepend(fast);
+  const fast=document.createElement('section');fast.className='fast-route';fast.innerHTML=`<p class="study-step">まずは要点</p><h3>この問題を解くための要点</h3><p>${esc(q.keyPoint)}</p><p class="reference-hint">下の図と対応表で確認できます。詳しい説明や選択肢比較は、必要な部分だけ開いてください。</p>`;root.prepend(fast);
   const lab=mountLab(q);if(lab)root.append(lab);
-  const recall=document.createElement('section');recall.className='recall-check';const record=state.recall[q.n]||{};
-  recall.innerHTML=`<h3>自分の言葉で説明してみる</h3><p>${esc(q.deep.check)}</p><label for="recall-${q.n}">あなたの説明（自動保存）</label><textarea id="recall-${q.n}" maxlength="1000" rows="3" placeholder="正答の根拠を自分の言葉で書きましょう。">${esc(record.draft||'')}</textarea><details class="recall-example"><summary>解答例と比べる</summary><p>${esc(q.deep.answer)}</p><p>説明の理解度は自己評価です。</p><button type="button" data-recall="known">自力で説明できた</button><button type="button" data-recall="again">もう一度確認する</button></details><p class="recall-state" aria-live="polite"></p>`;
+  const recall=document.createElement('details');recall.className='recall-check reference-details';const record=state.recall[q.n]||{};
+  recall.innerHTML=`<summary>任意のメモ・説明練習（課題の提出欄ではありません）</summary><div class="reference-body"><h3>説明を整理したいときに</h3><p class="reference-hint">別途Google Formsで行う用語説明課題とは別の、個人用メモです。入力・自己評価は問題課題の達成条件に含みません。</p><p>${esc(q.deep.check)}</p><label for="recall-${q.n}">あなたの説明（自動保存）</label><textarea id="recall-${q.n}" maxlength="1000" rows="3" placeholder="正答の根拠を自分の言葉で書きましょう。">${esc(record.draft||'')}</textarea><details class="recall-example"><summary>解答例と比べる</summary><p>${esc(q.deep.answer)}</p><p>説明の理解度は自己評価です。</p><button type="button" data-recall="known">自力で説明できた</button><button type="button" data-recall="again">もう一度確認する</button></details><p class="recall-state" aria-live="polite"></p></div>`;
   const show=()=>{const s=state.recall[q.n]?.status;recall.querySelector('.recall-state').textContent=s==='known'?'自己評価：自力で説明できた':s==='again'?'自己評価：もう一度確認する':'説明を書いてから解答例を確認しましょう。'};
   recall.querySelector('textarea').oninput=e=>{state.recall[q.n]={...(state.recall[q.n]||{}),draft:e.target.value.slice(0,1000)};save()};
   recall.onclick=e=>{const status=e.target.closest('[data-recall]')?.dataset.recall;if(status){state.recall[q.n]={...(state.recall[q.n]||{}),status};save();show()}};show();root.append(recall);

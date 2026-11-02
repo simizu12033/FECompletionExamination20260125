@@ -52,6 +52,10 @@ const retryWasChecked=q=>Object.prototype.hasOwnProperty.call(learningState.retr
 const needsRetry=q=>isReview()&&wasWrong(q)&&!retryCheckedCorrect(q);
 const retryAnswerCount=()=>QUESTIONS.filter(q=>wasWrong(q)&&learningState.retryAnswers[q.n]).length;
 const retryCheckedCorrectCount=()=>QUESTIONS.filter(q=>wasWrong(q)&&retryCheckedCorrect(q)).length;
+// Task completion counts graded correct answers only; reference use is optional.
+const taskCorrectCount=()=>isReview()?gradedQuestions.filter(q=>!wasWrong(q)||retryCheckedCorrect(q)).length:0;
+const taskComplete=()=>isReview()&&taskCorrectCount()===gradedTotal;
+
 
 function visible(q){
   if(!isReview())return true;
@@ -133,7 +137,7 @@ function renderLearning(){
           const ok=retryCheckedCorrect(q);
           line.className=`result-line ${ok?"correct":"wrong"}`;
           line.textContent=ok
-            ?`再回答は正解です。解説を確認してください。`
+            ?`再回答は正解です。必要に応じて参考解説を確認できます。`
             :`再回答は不正解でした。もう一度考えて選び直してください。`;
         }else{
           line.className="result-line wrong";
@@ -159,13 +163,16 @@ function renderLearning(){
     node.querySelector(".trap p").textContent=q.trap;
     if(q.reference){const ref=document.createElement("p");ref.innerHTML=`<a href="${esc(q.reference[1])}" target="_blank" rel="noopener">参考：${esc(q.reference[0])}</a>`;node.querySelector(".explanation").appendChild(ref);}
 
-    const compare=document.createElement("section");
-    compare.className="option-comparison";
-    compare.innerHTML=`<nav class="related-term-links" aria-label="関連用語カード">${q.termIds.map(id=>{const t=TERMS.find(t=>t.id===id);return `<a href="#termLearning" data-term-ref="${esc(id)}">${esc(t.term)}</a>`}).join(" ")}</nav><h3>ア〜エを比べる</h3><p>用語の意味と、この問題で選ぶ・選ばない理由を確認します。</p><div class="choice-comparison-grid">${q.choices.map(c=>`<article class="choice-comparison ${c.chosen?'chosen':''}"><h4><b>${c.label}</b> ${esc(c.term)}${c.chosen?'<small>この問題で選ぶ</small>':''}</h4>${c.fullName?`<p class="choice-full-name"><b>${esc(c.abbreviation)}の正式名称</b><span lang="en">${esc(c.fullName)}</span><span>${esc(c.nameMeaning)}</span></p>`:""}<p>${esc(c.meaning)}</p><div>${esc(c.explanation)}</div></article>`).join("")}</div>`;
+    const compare=document.createElement("details");
+    compare.className="option-comparison reference-details";
+    compare.innerHTML=`<summary>選択肢の違いを調べる（ア〜エ）</summary><div class="reference-body"><nav class="related-term-links" aria-label="関連用語カード">${q.termIds.map(id=>{const t=TERMS.find(t=>t.id===id);return `<a href="#termLearning" data-term-ref="${esc(id)}">${esc(t.term)}</a>`}).join(" ")}</nav><h3>ア〜エを比べる</h3><p>用語の意味と、この問題で選ぶ・選ばない理由を確認します。</p><div class="choice-comparison-grid">${q.choices.map(c=>`<article class="choice-comparison ${c.chosen?'chosen':''}"><h4><b>${c.label}</b> ${esc(c.term)}${c.chosen?'<small>この問題で選ぶ</small>':''}</h4>${c.fullName?`<p class="choice-full-name"><b>${esc(c.abbreviation)}の正式名称</b><span lang="en">${esc(c.fullName)}</span><span>${esc(c.nameMeaning)}</span></p>`:""}<p>${esc(c.meaning)}</p><div>${esc(c.explanation)}</div></article>`).join("")}</div></div>`;
     node.querySelector(".review-content").appendChild(compare);
     FEStudy.enhanceQuestion(node,q);
     node.querySelector(".diagram").innerHTML=window.renderRichVisual(q);
     node.querySelector("figcaption").textContent=q.caption;
+    const guide=node.querySelector(".diagram-guide");
+    guide.innerHTML=`<h3>問題と図の対応</h3><p class="diagram-origin"><b>${esc(q.diagramKind)}</b>：${q.diagramKind.includes('例')?"説明用の値・場面を含みます。問題の条件と区別して参照してください。":"問題の記号・数値や概念を図に対応させています。"}</p><table><thead><tr><th>問題で確認する箇所</th><th>図ではここを見る</th><th>読み取ること</th></tr></thead><tbody>${q.diagramGuide.map(row=>`<tr><td data-label="問題">${esc(row.problem)}</td><td data-label="図">${esc(row.diagram)}</td><td data-label="読み方">${esc(row.read)}</td></tr>`).join('')}</tbody></table>`;
+
     const check=node.querySelector(".understand-check input");
     check.checked=learningState.understood.has(q.n);
     check.onchange=()=>{
@@ -184,16 +191,16 @@ function renderLearning(){
 }
 
 function updatePhasePanel(){
-  const complete=learningState.understood.size===gradedTotal;
+  const complete=taskComplete();
   const unresolved=QUESTIONS.filter(needsRetry).length;
   const retryAnswers=retryAnswerCount();
   const retryCorrect=retryCheckedCorrectCount();
-  const totalCorrect=firstScore()+retryCorrect;
+  const totalCorrect=taskCorrectCount();
   qs("#reviewToolbar").hidden=!isReview();
   document.querySelectorAll("[data-exam-controls]").forEach(el=>el.hidden=isReview());
   qs("#listTitle").textContent=isReview()?"採点結果と解説":"試験問題";
   qs("#phaseMessage").textContent=isReview()
-    ?`採点済みです。初回に正答に至らなかった問題は選択肢を押して再回答できます。正誤は「再回答を採点する」を押した時だけ表示します。（未解決 ${unresolved}問）`
+    ?`問題課題の進捗：正答 ${totalCorrect} / ${gradedTotal}問。残り ${unresolved}問です。再回答を採点して全問正答を目指してください。解説・図・理解チェックは必要なときに使う参考資料です。`
     :`${answeredCount()}問回答済み。迷った問題は「解説表示」を開いて確認してから、改めて回答できます。60問すべてに回答すると採点できます。`;
   document.querySelectorAll(".retry-grade-area").forEach(area=>{
     area.hidden=!isReview()||QUESTIONS.every(q=>!wasWrong(q));
@@ -212,7 +219,7 @@ function updatePhasePanel(){
   summary.hidden=!isReview();
   qs("#answerLegend").hidden=!isReview();
   if(isReview()){
-    summary.innerHTML=`<div><strong>${firstScore()} / ${gradedTotal}</strong><span>初回の正解数（固定）</span></div><div><strong>${totalCorrect} / ${gradedTotal}</strong><span>再回答採点後の正解数</span></div><div><strong>${gradedTotal-totalCorrect}</strong><span>再回答で未解決</span></div><div><strong>${learningState.understood.size}</strong><span>理解チェック済み（自己評価）</span></div><p class="score-explanation">再回答で${retryCorrect}問改善。初回の成績は書き換えず、学習レポートにも残します。解説を見た状態での正答と初回の正答を区別して確認してください。</p>`;
+    summary.innerHTML=`<div><strong>${firstScore()} / ${gradedTotal}</strong><span>初回の正解数（固定）</span></div><div><strong>${totalCorrect} / ${gradedTotal}</strong><span>再回答採点後の正解数</span></div><div><strong>${gradedTotal-totalCorrect}</strong><span>再回答で未解決</span></div><div><strong>${complete?"達成":"あと"+unresolved+"問"}</strong><span>問題課題（全問正答）</span></div><p class="score-explanation">再回答で${retryCorrect}問改善。初回の成績は書き換えず、学習レポートにも残します。初回と再回答後の結果を分けて確認できます。全問正答はこの問題課題の達成を示します。用語を自分の言葉で説明する課題は、別途Google Formsで取り組んでください。</p>`;
   }
   document.querySelectorAll("#phaseSteps [data-step]").forEach(el=>{
     el.classList.remove("active","finished");
@@ -223,7 +230,7 @@ function updatePhasePanel(){
     if(complete&&step!=="complete")el.classList.add("finished");
     if(complete&&step==="complete")el.classList.add("active");
   });
-  if(complete)qs("#phaseMessage").innerHTML=`<div class="completion"><strong>学習完了！</strong>60問すべての理解チェックが付きました。</div>`;
+  if(complete)qs("#phaseMessage").innerHTML=`<div class="completion"><strong>問題課題達成！</strong>採点済みの回答で全${gradedTotal}問の正答を得ました（初回${firstScore()}問・再回答で${retryCorrect}問改善）。<p>用語説明の課題は別途Google Formsで取り組んでください。この画面では提出・評価状況を判定しません。</p><small>理解チェック、説明欄、用語カード、条件変更演習の利用は任意です。</small></div>`;
   if(isReview()){
     ensureFirstReport();
     renderFirstReport();
@@ -243,8 +250,8 @@ function renderLearningMap(){
 }
 
 function updateLearningHeader(){
-  const count=isReview()?learningState.understood.size:answeredCount();
-  qs("#progressText").textContent=isReview()?`理解 ${count} / 60`:`試験 ${count} / ${gradedTotal}`;
+  const count=isReview()?taskCorrectCount():answeredCount();
+  qs("#progressText").textContent=isReview()?`正答 ${count} / ${gradedTotal}`:`試験 ${count} / ${gradedTotal}`;
   qs("#progressBar").style.width=`${count/(isReview()?gradedTotal:gradedTotal)*100}%`;
 }
 
@@ -281,7 +288,7 @@ function renderFirstReport(){
   qs("#learningReport").hidden=false;
   const graded=new Date(report.gradedAt),retest=new Date(graded);
   retest.setDate(retest.getDate()+7);
-  qs("#reportDate").textContent=`初回採点日：${formatDate(graded)}　総合正答率：${Math.round(report.score/report.total*100)}%（${report.score}/${report.total}問）　${report.score>=36?"合格基準達成（36問以上）":"合格基準まであと"+(36-report.score)+"問"}`;
+  qs("#reportDate").textContent=`初回採点日：${formatDate(graded)}　総合正答率：${Math.round(report.score/report.total*100)}%（${report.score}/${report.total}問）　${report.score>=36?"試験の合格基準達成（36問以上／問題課題の目標は60問）":"試験の合格基準まであと"+(36-report.score)+"問"}`;
   const entries=Object.entries(report.fields).map(([field,v])=>({field,...v,rate:Math.round(v.correct/v.total*100)}));
   qs("#fieldStats").innerHTML=entries.map(x=>`<div><span>${x.field}</span><div><i style="width:${x.rate}%"></i></div><b>${x.rate}%</b><small>${x.correct}/${x.total}</small></div>`).join("");
   const max=Math.max(...entries.map(x=>x.rate)),min=Math.min(...entries.map(x=>x.rate));
